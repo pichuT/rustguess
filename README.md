@@ -68,7 +68,24 @@ sudo rmmod rustguess
 ```
 
 ## Code Tour
+`impl kernel::InPlaceModule for RustGuess` — that is where the global game state is initialized and the device is registered via `MiscDeviceRegistration`.
+`write_iter` — that is where the interesting work happens. It drains the user's input bytes, parses them as a `u64`, locks the global game state, and picks a response based on whether the guess is too low, too high, or correct. 
+`match` covers every case — Rust's type system requires every `Option` variant to be handled, so there is no path where a malformed guess goes unhandled.
+`read_iter` delivers the response back to user space. It uses a per-open `served` alongside the global `consumed` flag to make `cat` exit cleanly after reading the current message once, without looping forever.
 
+## Design Notes
+**Why `global_lock!` + `Mutex<GameState>`?** The game state is shared across all opens of `/dev/rustguess` — every `echo` and every `cat` sees the same in-progress game. The `global_lock!` enforces that you cannot touch `GAME` without holding the lock; the guard auto-releases on scope exit. You cannot accidentally access the game state unprotected as the compiler prevents it.
+
+**Why a per-open `served` flag?** Without it, `cat` would call `read()` in a loop and see the same message forever. The `served` flag marks when this particular open has already streamed the current message, so the next `read()` returns 0 (EOF) and `cat` exits cleanly.
+
+**Why `KVec<u8>` instead of a fixed array?** Messages vary in length depending on the guess value and try count. `KVec` is buffer where fallible allocation via `extend_from_slice(..., GFP_KERNEL)?` means allocation failures propagate as errors rather than panicking the kernel.
+
+**Why no `Drop` implementation?** Cleanup is handled automatically. The `MiscDeviceRegistration` field has its own `Drop` that deregisters the device when the module is unloaded. There is no cleanup function to forget.
+
+## Future Work
+- **Random secret.** Use `kernel::random::getrandom` to pick a fresh secret at module load instead of hardcoding `42`.
+- **Difficulty levels.** Write `RANGE:1000\n` to expand the search space before guessing.
+- **Cheat code.** A `REVEAL\n` command in debug mode that prints the secret.
 
 
 
