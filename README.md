@@ -30,8 +30,6 @@ You already won! `rmmod rustguess && insmod rustguess.ko` to play again.
 `rustguess` is a Linux kernel module that runs a number-guessing game. You write guesses in, you read hints back. The game state persists until you unload and reload the module. This project is a small example of how kernel code can host user-facing protocols at Ring 0, written entirely in Rust.
 
 ## Build & Run
-## Build & Run
-
 **Set up the VM and toolchain:**
 
 ```bash
